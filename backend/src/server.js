@@ -5,6 +5,7 @@ import crypto from "crypto";
 import admin from "firebase-admin";
 import { z } from "zod";
 import { db, auth } from "./firebase.js";
+import { sendVerificationCode } from "./mailer.js";
 
 const CATEGORIES = ["Viennoiserie", "Sandwich", "Plat", "Salade", "Dessert", "Boisson", "Autre", "Panier surprise"];
 const PENDING_MINUTES = 15;   // délai pour payer une réservation avant libération du stock
@@ -21,35 +22,13 @@ app.use(express.json({ limit: "1mb" })); // 1 Mo : photos redimensionnées envoy
 const requireAuth = async (req, res, next) => {
   try {
     const token = (req.headers.authorization || "").replace("Bearer ", "");
-    const { uid } = await auth.verifyIdToken(token);
-    const userRef = db.collection("users").doc(uid);
-    let snap = await userRef.get();
-    if (!snap.exists) {
-      // Migrate accounts created before the API profile record was introduced.
-      const firebaseUser = await auth.getUser(uid);
-      const shopRef = db.collection("shops").doc(uid);
-      await db.runTransaction(async (t) => {
-        const existing = await t.get(userRef);
-        if (existing.exists) return;
-        const shop = await t.get(shopRef);
-        const email = (firebaseUser.email || "").toLowerCase();
-        const role = email === "admin@campussave.tn"
-          ? "admin"
-          : shop.exists ? "merchant" : "student";
-        const name = firebaseUser.displayName?.trim() || firebaseUser.email?.split("@")[0] || "CampusSave member";
-        t.create(userRef, {
-          name,
-          email: firebaseUser.email || "",
-          phone: firebaseUser.phoneNumber || shop.data()?.phone || "",
-          role,
-          blocked: false,
-          createdAt: Date.now(),
-        });
-      });
-      snap = await userRef.get();
-    }
+    const { uid, auth_time } = await auth.verifyIdToken(token);
+    const snap = await db.collection("users").doc(uid).get();
+    if (!snap.exists) return res.status(403).json({ error: "Profil introuvable" });
     if (snap.data().blocked) return res.status(403).json({ error: "Compte bloqué par l'administrateur" });
-    req.user = { uid, ...snap.data() };
+    if (snap.data().emailVerified === false && !["/api/me", "/api/verify/send", "/api/verify/confirm"].includes(req.path))
+      return res.status(403).json({ error: "Vérifie ton adresse e-mail pour continuer.", code: "email_unverified" }); // les comptes créés avant cette fonction n'ont pas le champ : ils restent valides
+    req.user = { uid, ...snap.data() }; req.authTime = auth_time;
     next();
   } catch { res.status(401).json({ error: "Non authentifié" }); }
 };
@@ -74,14 +53,16 @@ const notify = async (uid, title, body) => {
 };
 
 // ---- Schémas ----
-const phone = z.string().trim().regex(/^\+?[0-9][0-9\s]{6,14}$/, "Numéro de téléphone invalide").optional().or(z.literal(""));
+const PHONE_RE = /^(\+216|00216)?\s?\d{2}\s?\d{3}\s?\d{3}$/; // 8 chiffres, indicatif +216 facultatif
+const PHONE_MSG = "Numéro de téléphone invalide (8 chiffres)";
+const phone = z.string().trim().regex(PHONE_RE, PHONE_MSG).optional().or(z.literal(""));
+const nameField = (label) => z.string().trim().min(2, `${label} trop court`).max(40);
 const profileSchema = z.object({
-  name: z.string().trim().min(2, "Nom trop court").max(60),
-  role: z.enum(["student", "merchant"]),
-  shopName: z.string().trim().min(2, "Nom du commerce requis").max(60).optional(),
-  address: z.string().trim().max(120).optional(),
-  phone,
+  firstName: nameField("Prénom"), lastName: nameField("Nom"), role: z.enum(["student", "merchant"]),
+  phone: z.string().trim().regex(PHONE_RE, PHONE_MSG),
+  shopName: z.string().trim().min(2, "Nom du commerce requis").max(60).optional(), address: z.string().trim().max(120).optional(),
 });
+const meSchema = z.object({ firstName: nameField("Prénom"), lastName: nameField("Nom"), phone: z.string().trim().regex(PHONE_RE, PHONE_MSG), email: z.string().trim().email("E-mail invalide").max(120) });
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Heure invalide (HH:MM)");
 const offerSchema = z.object({
   title: z.string().trim().min(2).max(80),
@@ -105,13 +86,13 @@ app.post("/api/users", wrap(async (req, res) => { // appelé après inscription 
   catch { return res.status(401).json({ error: "Non authentifié" }); }
   const p = profileSchema.safeParse(req.body); // admin impossible par inscription (enum)
   if (!p.success) return res.status(400).json({ error: p.error.issues.map(i => i.message).join(", ") });
-  const { name, role, shopName, address, phone: tel } = p.data;
+  const { firstName, lastName, role, shopName, address, phone: tel } = p.data;
   if (role === "merchant" && !shopName) return res.status(400).json({ error: "Nom du commerce requis" });
   const ref = db.collection("users").doc(uid);
   if ((await ref.get()).exists) return res.status(409).json({ error: "Profil déjà existant" }); // empêche de changer son rôle
-  await ref.set({ name, email, phone: tel || "", role, blocked: false, createdAt: Date.now() });
+  await ref.set({ firstName, lastName, name: `${firstName} ${lastName}`, phone: tel, email, role, emailVerified: false, blocked: false, createdAt: Date.now() });
   if (role === "merchant")
-    await db.collection("shops").doc(uid).set({ name: shopName, address: address || "", phone: tel || "", description: "", ownerId: uid, approved: false, createdAt: Date.now() });
+    await db.collection("shops").doc(uid).set({ name: shopName, address: address || "", phone: tel, description: "", ownerId: uid, approved: false, createdAt: Date.now() });
   res.status(201).json({ ok: true });
 }));
 app.get("/api/me", requireAuth, wrap(async (req, res) => {
@@ -119,10 +100,48 @@ app.get("/api/me", requireAuth, wrap(async (req, res) => {
   const { fcmTokens, ...safe } = req.user;
   res.json({ ...safe, shop });
 }));
-app.put("/api/me", requireAuth, validate(z.object({
-  name: z.string().trim().min(2, "Nom trop court").max(60), phone,
-})), wrap(async (req, res) => {
-  await db.collection("users").doc(req.user.uid).update({ name: req.body.name, phone: req.body.phone || "" }); res.json({ ok: true });
+app.put("/api/me", requireAuth, validate(meSchema), wrap(async (req, res) => {
+  const { firstName, lastName, phone: tel, email } = req.body, upd = { firstName, lastName, name: `${firstName} ${lastName}`, phone: tel };
+  if (email.toLowerCase() !== (req.user.email || "").toLowerCase()) { // changer d'e-mail exige une connexion récente (< 5 min)
+    if (Date.now() / 1000 - (req.authTime || 0) > 300) return res.status(401).json({ error: "Confirme ton mot de passe pour changer d'e-mail." });
+    try { await auth.updateUser(req.user.uid, { email }); }
+    catch (e) { return res.status(e.code === "auth/email-already-exists" ? 409 : 400).json({ error: e.code === "auth/email-already-exists" ? "Cet e-mail est déjà utilisé." : "E-mail invalide." }); }
+    upd.email = email; upd.emailVerified = false; // la nouvelle adresse doit être vérifiée
+    await db.collection("emailCodes").doc(req.user.uid).delete().catch(() => {});
+  }
+  await db.collection("users").doc(req.user.uid).update(upd); res.json({ ok: true });
+}));
+// ---- Vérification de l'e-mail par code à 6 chiffres (valable 10 min, 5 essais, renvoi limité) ----
+const CODE_MINUTES = 10, RESEND_SECONDS = 45, MAX_SENDS_PER_HOUR = 5, MAX_TRIES = 5;
+const hashCode = (uid, code) => crypto.createHmac("sha256", process.env.CODE_SECRET || "campussave-dev-secret").update(`${uid}:${code}`).digest("hex"); // le code n'est jamais stocké en clair
+app.post("/api/verify/send", requireAuth, wrap(async (req, res) => {
+  if (req.user.emailVerified !== false) return res.json({ ok: true, already: true });
+  const ref = db.collection("emailCodes").doc(req.user.uid), d = (await ref.get()).data() || {}, now = Date.now();
+  const wait = Math.ceil(((d.sentAt || 0) + RESEND_SECONDS * 1000 - now) / 1000);
+  if (wait > 0 && d.hash) return res.json({ ok: true, cooldown: true, wait }); // un code vient d'être envoyé
+  const fresh = !d.windowStart || now - d.windowStart > 3600e3, windowStart = fresh ? now : d.windowStart, sends = fresh ? 0 : (d.sends || 0);
+  if (sends >= MAX_SENDS_PER_HOUR) return res.status(429).json({ error: "Trop de codes demandés. Réessaie dans une heure." });
+  const code = String(crypto.randomInt(0, 1e6)).padStart(6, "0");
+  let r;
+  try { r = await sendVerificationCode({ to: req.user.email, name: req.user.firstName || req.user.name, code, minutes: CODE_MINUTES }); }
+  catch (e) { console.error("Envoi e-mail :", e.message); return res.status(502).json({ error: "Impossible d'envoyer l'e-mail pour le moment. Réessaie dans un instant." }); }
+  await ref.set({ hash: hashCode(req.user.uid, code), expiresAt: now + CODE_MINUTES * 60000, tries: 0, sentAt: now, sends: sends + 1, windowStart });
+  res.json({ ok: true, wait: RESEND_SECONDS, dev: !!r.dev });
+}));
+app.post("/api/verify/confirm", requireAuth, validate(z.object({ code: z.string().trim().regex(/^\d{6}$/, "Le code contient 6 chiffres.") })), wrap(async (req, res) => {
+  if (req.user.emailVerified !== false) return res.json({ ok: true, already: true });
+  const ref = db.collection("emailCodes").doc(req.user.uid), d = (await ref.get()).data();
+  if (!d?.hash) return res.status(400).json({ error: "Aucun code actif : demande un nouveau code." });
+  if (Date.now() > d.expiresAt) return res.status(400).json({ error: "Ce code a expiré : demande un nouveau code." });
+  if ((d.tries || 0) >= MAX_TRIES) return res.status(429).json({ error: "Trop d'essais : demande un nouveau code." });
+  const a = Buffer.from(hashCode(req.user.uid, req.body.code)), b = Buffer.from(d.hash);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    const tries = (d.tries || 0) + 1; await ref.update({ tries }); const left = MAX_TRIES - tries;
+    return res.status(400).json({ error: left > 0 ? `Code incorrect. Il te reste ${left} essai${left > 1 ? "s" : ""}.` : "Code incorrect. Demande un nouveau code." });
+  }
+  await db.collection("users").doc(req.user.uid).update({ emailVerified: true, emailVerifiedAt: Date.now() });
+  auth.updateUser(req.user.uid, { emailVerified: true }).catch(() => {}); // synchronise l'indicateur Firebase Auth
+  await ref.delete(); res.json({ ok: true });
 }));
 app.put("/api/shop", requireAuth, requireRole("merchant"), validate(z.object({
   name: z.string().trim().min(2, "Nom trop court").max(60), address: z.string().trim().max(120).optional(),
@@ -343,7 +362,10 @@ app.post("/api/orders/validate", requireAuth, requireRole("merchant"), validate(
   });
   if (r.error) return res.status(r.code).json({ error: r.error });
   notify(r.o.studentId, "Commande retirée", `Merci ! +${r.points} EcoPoints pour « ${r.o.title} ».`);
-  res.json({ ok: true, title: r.o.title, quantity: r.o.quantity, studentName: r.o.studentName || "", points: r.points });
+  const off = (await db.collection("offers").doc(r.o.offerId).get()).data();
+  const hm = new Date().toLocaleTimeString("fr-FR", { timeZone: "Africa/Tunis", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  res.json({ ok: true, title: r.o.title, quantity: r.o.quantity, studentName: r.o.studentName || "", points: r.points,
+    outsideSlot: !!off && (hm < off.pickupFrom || hm > off.pickupTo), slot: off ? `${off.pickupFrom}–${off.pickupTo}` : "" });
 }));
 
 // ---- Administrateur ----
@@ -384,9 +406,6 @@ app.get("/api/stats", requireAuth, wrap(async (req, res) => {
   const top = {}; done.forEach(o => { top[o.title] = (top[o.title] || 0) + o.quantity; });
   const out = {
     orders: done.length, revenue: +sum(done, o => o.total).toFixed(3),
-    totalOrders: all.length,
-    completedOrders: all.filter(o => o.status === "collected").length,
-    soldItems: sum(done, o => o.quantity),
     mealsSaved: sum(all.filter(o => o.status === "collected"), o => o.quantity), // repas réellement récupérés
     toCollect: all.filter(o => o.status === "paid").length,
     savings: +sum(done, o => (o.originalTotal || o.total) - o.total).toFixed(3),
@@ -402,6 +421,42 @@ app.get("/api/stats", requireAuth, wrap(async (req, res) => {
       activeOffers: (await db.collection("offers").where("quantity", ">", 0).count().get()).data().count });
   }
   res.json(out);
+}));
+
+// ---- Supervision administrateur : vue d'ensemble, commandes, modération des offres ----
+const byId = (snap) => snap.docs.map(d => ({ id: d.id, ...d.data() }));
+const newest = (a, b) => (b.createdAt || 0) - (a.createdAt || 0);
+app.get("/api/admin/overview", requireAuth, requireRole("admin"), wrap(async (_, res) => {
+  const [users, shops, orders, offers] = (await Promise.all(["users", "shops", "orders", "offers"].map(c => db.collection(c).get()))).map(byId);
+  const shopName = Object.fromEntries(shops.map(s => [s.id, s.name]));
+  const done = orders.filter(o => ["paid", "collected"].includes(o.status)), sum = (a, f) => a.reduce((s, x) => s + f(x), 0), today = dayKey(Date.now());
+  const days = Array.from({ length: 14 }, (_, i) => dayKey(Date.now() - (13 - i) * 864e5));
+  const rev = {}; done.forEach(o => { rev[o.shopId] = (rev[o.shopId] || 0) + o.total; });
+  res.json({
+    kpis: { users: users.length, students: users.filter(u => u.role === "student").length, merchants: users.filter(u => u.role === "merchant").length, blocked: users.filter(u => u.blocked).length,
+      shopsApproved: shops.filter(s => s.approved).length, shopsPending: shops.filter(s => !s.approved).length, offersActive: offers.filter(o => o.quantity > 0).length, offersTotal: offers.length,
+      ordersTotal: orders.length, ordersToday: orders.filter(o => dayKey(o.createdAt) === today).length, toCollect: orders.filter(o => o.status === "paid").length,
+      revenue: +sum(done, o => o.total).toFixed(3), meals: sum(orders.filter(o => o.status === "collected"), o => o.quantity), savings: +sum(done, o => (o.originalTotal || o.total) - o.total).toFixed(3) },
+    byDay: days.map(date => { const d = done.filter(o => dayKey(o.paidAt || o.createdAt) === date); return { date, orders: d.length, revenue: +sum(d, o => o.total).toFixed(3) }; }),
+    statusCounts: orders.reduce((c, o) => ({ ...c, [o.status]: (c[o.status] || 0) + 1 }), {}),
+    pendingShops: shops.filter(s => !s.approved).sort(newest).map(({ id, name, address, phone, createdAt }) => ({ id, name, address, phone, createdAt })),
+    recentUsers: users.sort(newest).slice(0, 6).map(({ id, name, email, role, createdAt, blocked }) => ({ id, name, email, role, createdAt, blocked })),
+    recentOrders: orders.sort(newest).slice(0, 8).map(o => ({ id: o.id, title: o.title, quantity: o.quantity, total: o.total, status: o.status, studentName: o.studentName, shopName: shopName[o.shopId], createdAt: o.createdAt })),
+    topShops: Object.entries(rev).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, t]) => ({ id, name: shopName[id] || "—", revenue: +t.toFixed(3) })),
+  });
+}));
+app.get("/api/admin/orders", requireAuth, requireRole("admin"), wrap(async (_, res) => {
+  const [orders, shops] = await Promise.all([db.collection("orders").get().then(byId), db.collection("shops").get().then(byId)]);
+  const shopName = Object.fromEntries(shops.map(s => [s.id, s.name]));
+  res.json(orders.sort(newest).slice(0, 500).map(({ qrToken, paymentRef, ...o }) => ({ ...o, shopName: shopName[o.shopId] || "—" })));
+}));
+app.get("/api/admin/offers", requireAuth, requireRole("admin"), wrap(async (_, res) => {
+  const [offers, shops] = await Promise.all([db.collection("offers").get().then(byId), db.collection("shops").get().then(byId)]);
+  const shopName = Object.fromEntries(shops.map(s => [s.id, s.name]));
+  res.json(offers.sort(newest).map(({ photo, ...o }) => ({ ...o, hasPhoto: !!photo, shopName: shopName[o.shopId] || "—" })));
+}));
+app.delete("/api/admin/offers/:id", requireAuth, requireRole("admin"), wrap(async (req, res) => {
+  await db.collection("offers").doc(req.params.id).delete(); res.json({ ok: true });
 }));
 
 app.use((err, _req, res, _next) => { console.error(err); res.status(500).json({ error: "Erreur serveur" }); });

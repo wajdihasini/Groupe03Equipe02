@@ -1,0 +1,11 @@
+.verify{min-height:100vh;background:var(--bg);display:flex;flex-direction:column}
+.verify>header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.5rem;border-bottom:1px solid var(--line);background:#fff}.verify>header .link{margin:0}
+.verify main{flex:1;display:grid;place-items:center;padding:2rem 1rem}
+.verify-card{width:100%;max-width:480px;background:#fff;border:1px solid var(--line);border-radius:var(--r-l);box-shadow:var(--sh-m);padding:2.2rem 2rem;text-align:center;display:flex;flex-direction:column;align-items:stretch}
+.verify-ico{width:60px;height:60px;border-radius:50%;background:var(--brand-50);color:var(--brand);display:grid;place-items:center;margin:0 auto 1rem}
+.verify-card h1{font-size:1.7rem}.verify-card .muted{margin-bottom:1.4rem}
+.code{display:flex;gap:.5rem;justify-content:center;margin:.4rem 0 1rem}
+.code input{width:52px;min-width:0;height:60px;padding:0;text-align:center;font:700 1.6rem var(--font);border-radius:12px}
+.verify-card .switch{margin-top:1.2rem}.verify-card form{text-align:left;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line)}
+.verify-card .link{align-self:center;margin:.8rem 0 0}
+@media (max-width:420px){.code{gap:.3rem}.code input{width:44px;height:54px;font-size:1.35rem}.verify-card{padding:1.6rem 1.2rem}}
