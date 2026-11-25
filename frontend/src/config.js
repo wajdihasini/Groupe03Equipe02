@@ -4,11 +4,11 @@ export const CAMPUS = { name: "Campus", lat: 36.8065, lng: 10.1815 };
 
 // Niveaux EcoPoints : points minimum pour atteindre chaque niveau.
 export const ECO_LEVELS = [
-  { name: "Graine", min: 0, color: "#6366f1" },
-  { name: "Pousse", min: 50, color: "#4f46e5" },
-  { name: "Arbuste", min: 150, color: "#4338ca" },
-  { name: "Arbre", min: 400, color: "#3730a3" },
-  { name: "Forêt", min: 1000, color: "#312e81" },
+  { name: "Graine", min: 0, color: "#34D399" },
+  { name: "Pousse", min: 50, color: "#10B981" },
+  { name: "Arbuste", min: 150, color: "#059669" },
+  { name: "Arbre", min: 400, color: "#047857" },
+  { name: "Forêt", min: 1000, color: "#065F46" },
 ];
 export const ecoLevel = (points = 0) => {
   const i = ECO_LEVELS.reduce((acc, l, idx) => (points >= l.min ? idx : acc), 0);

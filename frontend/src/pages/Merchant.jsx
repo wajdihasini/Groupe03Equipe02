@@ -31,7 +31,7 @@ export default function Merchant({ me }) {
   const empty = { title: "", category: "Plat", description: "", photo: "", originalPrice: "", price: "", quantity: "", pickupFrom: "17:00", pickupTo: "19:00" };
   const [f, setF] = useState(empty), [data, setData] = useState(null), [errs, setErrs] = useState({}), [e, setE] = useState(""), [editId, setEditId] = useState(null), [saved, setSaved] = useState("");
   const [page, setPage] = useState(1), [token, setToken] = useState(""), [m, setM] = useState(null), [scan, setScan] = useState(false);
-  const [orders, setOrders] = useState(null), [tab, setTab] = useState("live");
+  const [orders, setOrders] = useState(null), [tab, setTab] = useState("live"), [uploading, setUploading] = useState(false);
   const list = data || [];
   const load = () => api("/api/my/offers").then(setData).catch(x => { setE(x.message); setData(d => d || []); });
   const loadOrders = () => api("/api/my/orders").then(setOrders).catch(() => setOrders(o => o || []));
@@ -53,7 +53,14 @@ export default function Merchant({ me }) {
   const pickPhoto = async ev => {
     const file = ev.target.files?.[0]; if (!file) return;
     if (!file.type.startsWith("image/")) return setErrs({ ...errs, photo: "Choisis un fichier image." });
-    try { setF({ ...f, photo: await fileToDataUrl(file) }); setErrs({ ...errs, photo: undefined }); } catch { setErrs({ ...errs, photo: "Impossible de lire cette image." }); }
+    let data;
+    try { data = await fileToDataUrl(file); } catch { return setErrs({ ...errs, photo: "Impossible de lire cette image." }); }
+    setUploading(true); setErrs({ ...errs, photo: undefined });
+    // La photo est enregistrée comme fichier sur le serveur : l'offre ne garde que son URL (catalogue plus léger).
+    // Si l'envoi échoue, on garde l'ancien fonctionnement (image intégrée à l'offre) pour ne pas bloquer le commerçant.
+    try { const { url } = await api("/api/uploads", { method: "POST", body: { data } }); setF(cur => ({ ...cur, photo: url })); }
+    catch { setF(cur => ({ ...cur, photo: data })); }
+    finally { setUploading(false); }
   };
   const save = async ev => {
     ev.preventDefault(); setE(""); setSaved("");
@@ -116,10 +123,10 @@ export default function Merchant({ me }) {
           <Field label="Retrait à partir de"><input type="time" value={f.pickupFrom} onChange={set("pickupFrom")} /></Field>
           <Field label="Retrait jusqu'à" error={errs.pickupTo}><input className={cls("pickupTo")} type="time" value={f.pickupTo} onChange={set("pickupTo")} /></Field></div>
         <Field label={basket ? "Indice sur le contenu (facultatif)" : "Description (facultatif)"} error={errs.description} hint={`${f.description.length}/300`}><textarea rows="3" maxLength={300} className={cls("description")} value={f.description} onChange={set("description")} placeholder={basket ? "Ex. : pains, viennoiseries et pâtisseries du jour" : "Ex. : pur beurre, cuit ce matin"} /></Field>
-        <Field label="Photo" error={errs.photo} hint="Choisis une image : elle est redimensionnée automatiquement.">
+        <Field label="Photo" error={errs.photo} hint={uploading ? "Envoi de la photo…" : "Choisis une image : elle est redimensionnée puis enregistrée sur le serveur."}>
           <div className="photo-pick"><input type="file" accept="image/*" onChange={pickPhoto} />{f.photo && <button type="button" className="btn small ghost" onClick={() => setF({ ...f, photo: "" })}>Retirer la photo</button>}</div></Field>
         <Err e={e} />{saved && <p className="ok" role="status">{saved}</p>}
-        <div><button className="btn">{editId ? "Enregistrer" : "Publier l'offre"}</button>{editId && <> <button type="button" className="btn ghost" onClick={() => { setEditId(null); setF(empty); setErrs({}); }}>Annuler</button></>}</div></form>
+        <div><button className="btn" disabled={uploading}>{editId ? "Enregistrer" : "Publier l'offre"}</button>{editId && <> <button type="button" className="btn ghost" onClick={() => { setEditId(null); setF(empty); setErrs({}); }}>Annuler</button></>}</div></form>
       <aside className="preview" aria-label="Aperçu de l'offre"><p className="muted">Aperçu tel que les étudiants le verront</p><OfferCard o={preview} /></aside>
     </div>
 

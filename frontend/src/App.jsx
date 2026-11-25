@@ -23,6 +23,13 @@ import FaqPage from "./pages/Faq.jsx";
 import Favorites from "./pages/Favorites.jsx";
 
 // ---------- Commandes ----------
+// Frise de progression d'une réservation (purement visuelle : réservée → payée → retirée).
+const ORDER_STEPS = [["pending_payment", "Réservée"], ["paid", "Payée"], ["collected", "Retirée"]];
+function OrderSteps({ s }) {
+  if (s === "cancelled" || s === "expired") return null;
+  const at = s === "collected" ? 2 : s === "paid" ? 1 : 0;
+  return <ol className="steps-line" aria-label={`Étape : ${ORDER_STEPS[at][1]}`}>{ORDER_STEPS.map(([k, l], i) => <li key={k} className={i < at ? "done" : i === at ? "now" : ""}>{l}</li>)}</ol>;
+}
 function Orders({ me }) {
   useTitle(me.role === "merchant" ? "Commandes reçues" : "Mes réservations");
   const [data, setData] = useState(null), [e, setE] = useState(""), [filter, setFilter] = useState(""), [page, setPage] = useState(1), now = useNow();
@@ -48,6 +55,7 @@ function Orders({ me }) {
       <div className="order-main"><h3>{o.title} × {o.quantity}</h3>
         <p className="muted">{o.total} TND · <Badge s={o.status === "pending_payment" && !left(o) ? "expired" : o.status} />{me.role === "merchant" && o.studentName ? ` · ${o.studentName}` : ""}</p>
         <p className="muted order-date">Réservée le {date(o.createdAt)}{o.collectedAt ? ` · retirée le ${date(o.collectedAt)}` : ""}</p>
+        <OrderSteps s={o.status === "pending_payment" && !left(o) ? "expired" : o.status} />
         {me.role === "student" && o.status === "pending_payment" && left(o) > 0 && <>
           <p className="muted">Temps restant pour payer : <strong className="countdown">{mmss(left(o))}</strong></p>
           <button className="btn small" onClick={() => pay(o)}>Payer maintenant</button>{" "}

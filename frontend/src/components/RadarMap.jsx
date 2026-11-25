@@ -24,7 +24,7 @@ export default function RadarMap({ center, shops = [], user = null, radiusKm = 0
       const tip = document.createElement("div"); tip.textContent = s.name; mk.bindTooltip(tip, { direction: "top", offset: [0, -34] }); // textContent : pas d'injection HTML
       mk.on("click", (e) => { L.DomEvent.stopPropagation(e); cb.current.onSelect?.(s.id); });
     });
-    if (user) { L.marker([user.lat, user.lng], { icon: dot, interactive: false }).addTo(g); if (radiusKm) L.circle([user.lat, user.lng], { radius: radiusKm * 1000, color: "#4f46e5", weight: 2, fillColor: "#4f46e5", fillOpacity: 0.08 }).addTo(g); }
+    if (user) { L.marker([user.lat, user.lng], { icon: dot, interactive: false }).addTo(g); if (radiusKm) L.circle([user.lat, user.lng], { radius: radiusKm * 1000, color: "#059669", weight: 2, fillColor: "#059669", fillOpacity: 0.08 }).addTo(g); }
     if (picked) L.marker([picked.lat, picked.lng], { icon: pin("sel", "•") }).addTo(g);
   }, [shops, user, radiusKm, selectedId, picked]);
   useEffect(() => { // cadrage

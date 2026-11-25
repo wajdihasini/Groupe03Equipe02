@@ -51,7 +51,7 @@ export default function Home({ me }) {
           <p className="lead">Les restaurants et cafétérias autour de l'ESSECT vendent leurs invendus du jour. Tu réserves, tu paies en ligne, tu récupères avec un QR code.</p>
           <form className="hero-search" onSubmit={search} role="search"><Icon name="search" /><input aria-label="Rechercher un produit ou un commerce" placeholder="Croissant, couscous, pizza, Café Médina…" value={q} onChange={e => setQ(e.target.value)} /><button className="btn lemon">Chercher</button></form>
           <div className="hero-cta"><Link className="btn ghost-light" to="/radar"><Icon name="pin" size={18} />Commerces près de moi</Link><Link className="btn ghost-light" to="/catalog?cat=Panier%20surprise"><Icon name="gift" size={18} />Paniers surprise</Link></div>
-          {list.length > 0 && <ul className="hero-facts"><li><b>{list.length}</b> offres disponibles</li><li><b>{shops.length || "—"}</b> commerces partenaires</li><li>jusqu'à <b>-{pct(best[0])}%</b></li></ul>}
+          {list.length > 0 && <ul className="hero-facts"><li><b>{list.length}</b> offres disponibles</li><li><b>{shops.length || "—"}</b> commerces partenaires</li><li><b>-{pct(best[0])}%</b> de réduction max.</li></ul>}
         </div>
         <div className="hero-stage" aria-hidden={!hero}>
           {hero ? <PriceDrop o={hero} /> : <div className="drop"><div className="drop-media"><FoodArt category="Panier surprise" /></div><div className="drop-body"><p>CampusSave</p><h3>Les premières offres arrivent</h3></div></div>}
