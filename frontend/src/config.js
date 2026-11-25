@@ -27,3 +27,24 @@ export const FAQ = [
   ["À quoi servent les EcoPoints ?", "Chaque repas récupéré te rapporte 10 points par portion. Ils font monter ton niveau (de Graine à Forêt) et te placent dans le classement des étudiants."],
   ["Comment un commerce rejoint-il CampusSave ?", "Il crée un compte commerçant, puis l'administrateur valide son inscription. Il peut ensuite publier ses offres, suivre ses commandes et scanner les QR codes."],
 ];
+
+// Questions supplémentaires, regroupées par public (page /faq). Elles décrivent le fonctionnement réel du site.
+export const FAQ_GROUPS = [
+  { id: "etudiants", title: "Étudiants", items: [
+    ...FAQ.slice(0, 4),
+    ["Combien de portions puis-je réserver ?", "Jusqu'à 10 portions par réservation, dans la limite du stock affiché. Le stock est vérifié par le serveur au moment de la réservation."],
+    ["Puis-je annuler une réservation ?", "Oui, depuis « Mes réservations », tant qu'elle n'est pas encore payée. Le stock est alors remis en vente immédiatement."],
+    ["Comment suivre l'état de ma réservation ?", "La page « Mes réservations » se met à jour automatiquement. Un message s'affiche aussi quand ton paiement est confirmé ou quand ta commande est retirée. Tu peux activer les notifications avec l'icône cloche."],
+    ["À quoi servent les favoris ?", "Le cœur sur une offre ou un commerce l'ajoute à « Mes favoris ». Suivre un commerce te permet de retrouver rapidement ses nouvelles offres. Les favoris sont enregistrés sur l'appareil que tu utilises."],
+  ] },
+  { id: "commerces", title: "Commerçants", items: [
+    FAQ[4],
+    ["Comment publier une offre ?", "Depuis « Mon commerce », remplis le formulaire : titre, catégorie, prix initial, prix réduit, quantité, créneau de retrait et photo. L'aperçu montre la carte telle que les étudiants la verront."],
+    ["Comment valider un retrait ?", "Dans « Mon commerce », scanne le QR code de l'étudiant avec la caméra ou saisis le code affiché sous le QR. La commande passe alors à « Retirée »."],
+    ["Puis-je republier une offre chaque jour ?", "Oui : le bouton « Dupliquer » recopie une offre existante dans le formulaire. Il suffit d'indiquer la nouvelle quantité et de publier."],
+    ["Comment apparaître sur la carte ?", "Dans ton profil, section « Mon commerce », place ton commerce sur la carte ou utilise ta position actuelle, puis enregistre."],
+  ] },
+];
+
+// Adresse affichée sur la page Contact. Définir VITE_CONTACT_EMAIL dans le fichier .env.
+export const CONTACT_EMAIL = import.meta.env.VITE_CONTACT_EMAIL || "";

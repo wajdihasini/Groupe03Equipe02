@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { FAQ } from "../config.js";
-import { FoodArt, Icon, Section, useTitle } from "../components/ui.jsx";
-import { Faq } from "./Home.jsx";
+import { Faq, FoodArt, Icon, Section, useTitle } from "../components/ui.jsx";
 
 const STEPS = [
   ["search", "1. Tu choisis", "Dans le catalogue ou sur le Campus Radar, repère une offre : le prix barré, le prix réduit, le créneau de retrait et le stock restant sont toujours affichés."],

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "firebase/auth";
 import { fb, api } from "../api.js";
-import { EMAIL_RE, PHONE_RE, FB_ERR, Err, Field, FoodArt, Icon, Logo, useTitle } from "../components/ui.jsx";
+import { EMAIL_RE, PHONE_RE, FB_ERR, Err, Field, FoodArt, Icon, Logo, toast, useTitle } from "../components/ui.jsx";
 import PasswordField from "../components/PasswordField.jsx";
 
 const NAME_RE = /^[\p{L}][\p{L}\s'-]{1,39}$/u;
@@ -43,7 +43,10 @@ export default function Login({ reload }) {
       } else await signInWithEmailAndPassword(fb, f.email, f.password);
       const me = await reload();
       if (!me) { await signOut(fb); return setE("Profil introuvable ou compte bloqué."); }
-      nav(me.role === "admin" ? "/admin" : me.role === "merchant" ? "/shop" : "/");
+      const next = params.get("next") || "";
+      const ok = next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/login");
+      toast(mode === "signup" ? "Compte créé. Bienvenue sur CampusSave !" : `Bon retour, ${me.firstName || (me.name || "").split(" ")[0] || ""} !`);
+      nav(ok ? next : me.role === "admin" ? "/admin" : me.role === "merchant" ? "/shop" : "/", { replace: true });
     } catch (err) { setE(FB_ERR[err.code] || err.message); } finally { setBusy(false); }
   };
   const signup = mode === "signup";

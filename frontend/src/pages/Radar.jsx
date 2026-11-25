@@ -43,9 +43,9 @@ export default function Radar() {
             <span className="shop-dist">{fmtDist(s.km)}</span><h3>{s.name}</h3><p>{s.address || "Adresse non renseignée"}</p>
             {s.description && <p className="shop-desc">{s.description}</p>}</button>
           <div className="shop-actions"><span className={`badge ${s.offersCount ? "ok" : ""}`}>{s.offersCount ? `${s.offersCount} offre${s.offersCount > 1 ? "s" : ""}` : "Aucune offre"}</span>
-            <span><Link className="btn small" to={`/catalog?shop=${s.id}`}>Voir les offres</Link>{" "}<a className="btn small ghost" href={`https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`} target="_blank" rel="noopener noreferrer">Itinéraire</a></span></div>
+            <span><Link className="btn small" to={`/restaurant/${s.id}`}>Voir le commerce</Link>{" "}<a className="btn small ghost" href={`https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`} target="_blank" rel="noopener noreferrer">Itinéraire</a></span></div>
         </article>)}
-        {unknown.length > 0 && <div className="shop-unknown"><h4>Position non renseignée</h4>{unknown.map(s => <p key={s.id}><Link to={`/catalog?shop=${s.id}`}>{s.name}</Link><small>{s.offersCount} offre(s)</small></p>)}</div>}
+        {unknown.length > 0 && <div className="shop-unknown"><h4>Position non renseignée</h4>{unknown.map(s => <p key={s.id}><Link to={`/restaurant/${s.id}`}>{s.name}</Link><small>{s.offersCount} offre(s)</small></p>)}</div>}
       </aside>
       <div className="radar-mapbox"><RadarMap center={origin} shops={near} user={user} radiusKm={user ? radius : 0} selectedId={sel} onSelect={setSel} />
         <small className="muted">Clique sur la carte puis utilise la molette pour zoomer. {user ? "Le point bleu indique ta position." : "Active « Me localiser » pour trier par distance à partir de toi."}</small></div>

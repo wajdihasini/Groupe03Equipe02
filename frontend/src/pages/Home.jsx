@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, CATEGORIES } from "../api.js";
 import { ecoLevel, FAQ } from "../config.js";
-import { CountUp, Err, FoodArt, Icon, OfferCard, OfferVisual, Section, SkeletonGrid, BASKET, fmt, pct, isNew, useTitle } from "../components/ui.jsx";
+import { CountUp, Err, Faq, FoodArt, Icon, OfferCard, OfferVisual, Section, SkeletonGrid, BASKET, fmt, pct, isNew, nowHM, useFavorites, useTitle } from "../components/ui.jsx";
 import { useReserve } from "../components/useReserve.js";
 
 // Le prix descend de l'ancien au nouveau prix, une seule fois, au chargement.
@@ -19,12 +19,11 @@ function PriceDrop({ o }) {
     <div className="drop-body"><p>{o.shopName}</p><h3>{o.title}</h3>
       <div className="drop-price"><s>{fmt(o.originalPrice)}</s><b>{fmt(v)}<small> TND</small></b></div></div></Link>;
 }
-const nowHM = () => new Date().toLocaleTimeString("fr-FR", { timeZone: "Africa/Tunis", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-export const Faq = ({ items = FAQ }) => <div className="faq">{items.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div>;
+export { Faq } from "../components/ui.jsx"; // conservé pour compatibilité
 
 export default function Home({ me }) {
   useTitle("");
-  const nav = useNavigate(), { reserve, msg } = useReserve(me);
+  const nav = useNavigate(), { reserve, msg } = useReserve(me), fav = useFavorites(me), favOn = fav.enabled ? fav.offers : null;
   const [offers, setOffers] = useState(null), [shops, setShops] = useState([]), [impact, setImpact] = useState(null), [recs, setRecs] = useState([]), [err, setErr] = useState(""), [q, setQ] = useState("");
   useEffect(() => {
     api("/api/offers").then(setOffers).catch(x => { setErr(x.message); setOffers([]); });
@@ -72,22 +71,22 @@ export default function Home({ me }) {
         <div className="cats">{CATEGORIES.map(c => <Link key={c} to={`/catalog?cat=${encodeURIComponent(c)}`} className="cat">{catPhoto(c) ? <img src={catPhoto(c)} alt="" loading="lazy" decoding="async" /> : <FoodArt category={c} />}<span><b>{c}</b><small>{count(c) ? `${count(c)} offre${count(c) > 1 ? "s" : ""}` : "Bientôt"}</small></span></Link>)}</div></Section>
 
       {soon.length > 0 && <Section title="À récupérer ce soir" sub="Les créneaux de retrait qui se terminent bientôt." action={<Link className="link" to="/catalog?sort=soon">Voir le catalogue</Link>}>
-        <div className="grid">{soon.map(o => <OfferCard key={o.id} o={o} onQuick={reserve} />)}</div></Section>}
+        <div className="grid">{soon.map(o => <OfferCard key={o.id} o={o} onQuick={reserve} fav={favOn} />)}</div></Section>}
 
-      {recs.length > 0 && <Section title="Pour toi" sub="Selon tes commandes passées."><div className="grid">{recs.slice(0, 4).map(o => <OfferCard key={o.id} o={o} reason={o.reason} onQuick={reserve} />)}</div></Section>}
+      {recs.length > 0 && <Section title="Pour toi" sub="Selon tes commandes passées."><div className="grid">{recs.slice(0, 4).map(o => <OfferCard key={o.id} o={o} reason={o.reason} onQuick={reserve} fav={favOn} />)}</div></Section>}
 
       <Section title={hasSales ? "Les plus demandés" : "Les plus grosses réductions"} sub={hasSales ? "Ce que les étudiants réservent le plus en ce moment." : "À saisir avant que le stock ne parte."} action={<Link className="link" to="/catalog">Tout le catalogue</Link>}>
-        {offers === null ? <SkeletonGrid /> : popular.length ? <div className="grid">{popular.map(o => <OfferCard key={o.id} o={o} onQuick={reserve} />)}</div> : <p className="muted">Aucune offre pour le moment. Reviens en fin de journée, quand les commerces publient leurs invendus.</p>}</Section>
+        {offers === null ? <SkeletonGrid /> : popular.length ? <div className="grid">{popular.map(o => <OfferCard key={o.id} o={o} onQuick={reserve} fav={favOn} />)}</div> : <p className="muted">Aucune offre pour le moment. Reviens en fin de journée, quand les commerces publient leurs invendus.</p>}</Section>
 
       {baskets.length > 0 && <section className="basket-band">
         <div className="basket-copy"><FoodArt category={BASKET} className="basket-art" /><div><h2>Paniers surprise</h2><p>Tu ne sais pas ce qu'il y a dedans, et c'est le principe : le commerçant y glisse ses invendus du jour. La valeur annoncée est toujours supérieure au prix payé.</p><Link className="btn lemon" to="/catalog?cat=Panier%20surprise">Voir tous les paniers</Link></div></div>
-        <div className="grid">{baskets.map(o => <OfferCard key={o.id} o={o} onQuick={reserve} />)}</div></section>}
+        <div className="grid">{baskets.map(o => <OfferCard key={o.id} o={o} onQuick={reserve} fav={favOn} />)}</div></section>}
 
       {fresh.length > 0 && <Section title={isNew(fresh[0]) ? "Nouveautés" : "Derniers ajouts"} sub="Publiées récemment par les commerces." action={<Link className="link" to="/catalog?sort=new">Voir plus</Link>}>
-        <div className="grid">{fresh.map(o => <OfferCard key={o.id} o={o} onQuick={reserve} />)}</div></Section>}
+        <div className="grid">{fresh.map(o => <OfferCard key={o.id} o={o} onQuick={reserve} fav={favOn} />)}</div></Section>}
 
       {topShops.length > 0 && <Section title="Les commerces partenaires" sub="Des adresses du quartier, validées par l'équipe CampusSave." action={<Link className="link" to="/radar">Voir la carte</Link>}>
-        <div className="shops-row">{topShops.map(s => <Link key={s.id} to={`/catalog?shop=${s.id}`} className="shop-chip"><span className="avatar" style={{ width: 46, height: 46 }}>{s.name[0]}</span><div><b>{s.name}</b><small>{s.address || "Tunis"}</small></div><em>{s.offersCount} offre{s.offersCount > 1 ? "s" : ""}</em></Link>)}</div></Section>}
+        <div className="shops-row">{topShops.map(s => <Link key={s.id} to={`/restaurant/${s.id}`} className="shop-chip"><span className="avatar" style={{ width: 46, height: 46 }}>{s.name[0]}</span><div><b>{s.name}</b><small>{s.address || "Tunis"}</small></div><em>{s.offersCount} offre{s.offersCount > 1 ? "s" : ""}</em></Link>)}</div></Section>}
 
       <Section title="Pourquoi CampusSave ?" sub="Une idée simple qui profite à tout le monde.">
         <div className="why">{[["user", "Pour les étudiants", "De vrais repas à moitié prix, près du campus, réservés en quelques clics.", "cobalt"], ["store", "Pour les commerçants", "Une vente de plus au lieu d'un invendu jeté, et de nouveaux clients chaque jour.", "lemon"], ["leaf", "Pour la planète", "Chaque repas récupéré évite du gaspillage. Tu suis ton impact et tu gagnes des EcoPoints.", "mint"]]
@@ -101,7 +100,7 @@ export default function Home({ me }) {
         <Link to="/radar" className="split-card radar"><Icon name="pin" size={30} /><h3>Campus Radar</h3><p>Une carte des restaurants et cafétérias autour de toi, avec le nombre d'offres disponibles et la distance.</p><span className="btn small">Ouvrir la carte</span></Link>
         <Link to="/impact" className="split-card eco"><Icon name="leaf" size={30} /><h3>EcoPoints et impact</h3><p>Chaque repas récupéré te rapporte des points. {me?.role === "student" ? `Tu es niveau ${ecoLevel(me.ecoPoints).name}.` : "Monte de niveau et grimpe au classement."}</p><span className="btn small">Voir mon impact</span></Link></section>
 
-      <Section title="Questions fréquentes" action={<Link className="link" to="/about#faq">Toutes les questions</Link>}><Faq items={FAQ.slice(0, 4)} /></Section>
+      <Section title="Questions fréquentes" action={<Link className="link" to="/faq">Toutes les questions</Link>}><Faq items={FAQ.slice(0, 4)} /></Section>
 
       {(!me || me.role === "student") && <section className="merchant-cta"><div><h2>Tu tiens un restaurant ou une cafétéria ?</h2><p>Transforme tes invendus en ventes : publie une offre en 1 minute, suis tes commandes et valide les retraits par QR code.</p></div><Link className="btn lemon" to="/partners">Devenir partenaire</Link></section>}
     </div></>;

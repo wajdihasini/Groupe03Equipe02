@@ -21,6 +21,10 @@ export const distanceKm = (a, b) => { // formule de haversine
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 12742 * Math.asin(Math.sqrt(h));
 };
+// Heure actuelle à Tunis au format HH:MM (les créneaux de retrait sont saisis en heure locale).
+export const nowHM = () => new Date().toLocaleTimeString("fr-FR", { timeZone: "Africa/Tunis", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+export const slotOpen = (o, hm = nowHM()) => o.pickupFrom <= hm && hm <= o.pickupTo;
+export const slotOver = (o, hm = nowHM()) => o.pickupTo < hm;
 export const fmtDist = (km) => (km < 1 ? `${Math.max(10, Math.round(km * 100) * 10)} m` : `${km.toFixed(1).replace(".", ",")} km`);
 
 export function useNow(ms = 1000) {
@@ -65,8 +69,10 @@ const P = {
   home: "M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z", grid: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
   chart: "M4 20V4M4 20h16M8 16v-5M13 16V8M18 16v-9", spark: "M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z", phone: "M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z",
   shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z", trend: "M3 17l6-6 4 4 8-8M15 7h6v6", logout: "M10 4H5v16h5M15 8l4 4-4 4M19 12H9", cam: "M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  heart: "M12 20s-7.5-4.6-9.2-9.4C1.6 7.2 3.9 4 7.3 4c2 0 3.6 1.1 4.7 2.8C13.1 5.1 14.7 4 16.7 4c3.4 0 5.7 3.2 4.5 6.6C19.5 15.4 12 20 12 20z", mail: "M3 6h18v12H3zM3 7l9 6 9-6",
+  help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.2v.1", lock: "M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4",
 };
-export const Icon = ({ name, size = 20, className = "" }) => <svg className={`ico ${className}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={P[name]} /></svg>;
+export const Icon = ({ name, size = 20, className = "", filled = false }) => <svg className={`ico ${className}`} width={size} height={size} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={P[name]} /></svg>;
 
 // ---------- Logo ----------
 export const Logo = ({ light }) => <span className={`logo ${light ? "light" : ""}`}>
@@ -111,24 +117,25 @@ export function OfferVisual({ o }) {
 export const isWikimedia = (url = "") => /upload\.wikimedia\.org/.test(url);
 
 // ---------- Carte produit (ticket) ----------
-export function OfferCard({ o, onQuick, reason }) {
-  const left = o.quantity, urgent = left <= 3;
+export function OfferCard({ o, onQuick, reason, dist, fav }) {
+  const left = o.quantity, urgent = left > 0 && left <= 3, soldOut = left <= 0;
   return <article className={`ticket ${isBasket(o) ? "is-basket" : ""}`}>
-    <Link to={`/offer/${o.id}`} className="ticket-media" aria-label={`Voir ${o.title}`}>
+    <div className="ticket-top"><Link to={`/offer/${o.id}`} className="ticket-media" aria-label={`Voir ${o.title}`}>
       <OfferVisual o={o} />
       <span className="sticker" aria-label={`${pct(o)} pour cent de réduction`}>-{pct(o)}%</span>
-      <span className="ticket-badges">{isBasket(o) && <em className="tag basket">Surprise</em>}{isNew(o) && <em className="tag new">Nouveau</em>}{o.sold >= 3 && <em className="tag hot">Populaire</em>}</span>
+      <span className="ticket-badges">{soldOut && <em className="tag out">Épuisé</em>}{isBasket(o) && <em className="tag basket">Surprise</em>}{isNew(o) && <em className="tag new">Nouveau</em>}{o.sold >= 3 && <em className="tag hot">Populaire</em>}</span>
     </Link>
+    {fav && <FavButton active={fav.has(o.id)} onToggle={() => fav.toggle(o.id)} label={o.title} />}</div>
     <div className="ticket-body">
-      <p className="ticket-shop"><Icon name="pin" size={14} />{o.shopName}</p>
+      <p className="ticket-shop"><Icon name="pin" size={14} />{o.shopId && o.id !== "preview" ? <Link className="ticket-shop-link" to={`/restaurant/${o.shopId}`}>{o.shopName}</Link> : o.shopName}{dist != null && <span className="ticket-dist">· {fmtDist(dist)}</span>}</p>
       <h3 className="ticket-title"><Link to={`/offer/${o.id}`}>{o.title}</Link></h3>
       {reason ? <p className="ticket-reason"><Icon name="spark" size={13} />{reason}</p> : o.description ? <p className="ticket-desc">{o.description}</p> : null}
       <div className="ticket-stub">
         <div className="ticket-price"><s>{fmt(o.originalPrice)} TND</s><strong>{fmt(o.price)}<small> TND</small></strong></div>
         <p className="ticket-meta"><Icon name="clock" size={14} />{o.pickupFrom}–{o.pickupTo}</p>
       </div>
-      <div className={`stock ${urgent ? "urgent" : ""}`}><span><i style={{ width: `${Math.max(8, Math.min(100, (left / 12) * 100))}%` }} /></span><b>{urgent ? `Plus que ${left}` : `${left} disponibles`}</b></div>
-      {onQuick && <button className="btn block" onClick={() => onQuick(o)}>Réserver 1 portion</button>}
+      <div className={`stock ${urgent ? "urgent" : ""}`}><span><i style={{ width: `${Math.max(8, Math.min(100, (left / 12) * 100))}%` }} /></span><b>{soldOut ? "Épuisé" : urgent ? `Plus que ${left}` : `${left} disponibles`}</b></div>
+      {onQuick && <button className="btn block" onClick={() => onQuick(o)} disabled={soldOut}>{soldOut ? "Épuisé" : "Réserver 1 portion"}</button>}
     </div>
   </article>;
 }
@@ -139,19 +146,21 @@ export function Header({ me, perm, onNotif, onLogout }) {
   useEffect(() => { setOpen(false); setMenu(false); }, [loc.pathname]);
   useEffect(() => { const f = (e) => { if (box.current && !box.current.contains(e.target)) setMenu(false); }; document.addEventListener("mousedown", f); return () => document.removeEventListener("mousedown", f); }, []);
   const admin = me?.role === "admin";
-  const links = admin ? [["/admin", "Espace admin"], ["/catalog", "Catalogue"], ["/impact", "Impact"]] : [["/", "Accueil"], ["/catalog", "Catalogue"], ["/radar", "Radar"], ["/impact", "Impact"],
-    ...(me?.role === "merchant" ? [["/shop", "Mon commerce"]] : []), ...(me ? [["/orders", "Commandes"]] : [])];
+  const first = (me?.name || me?.firstName || "Mon compte").trim().split(" ")[0];
+  const links = admin ? [["/admin", "Espace admin"], ["/catalog", "Catalogue"], ["/impact", "Impact"]] : [["/", "Accueil"], ["/catalog", "Catalogue"], ["/radar", "Restaurants"], ["/impact", "Impact"],
+    ...(me?.role === "merchant" ? [["/shop", "Mon commerce"]] : []), ...(me?.role === "student" ? [["/dashboard", "Mon espace"]] : []), ...(me ? [["/orders", me.role === "merchant" ? "Commandes" : "Réservations"]] : [])];
   return <header className="topbar"><div className="topbar-in">
     <Link to={admin ? "/admin" : "/"} aria-label="CampusSave, accueil"><Logo /></Link>
     <nav className={`navlinks ${open ? "open" : ""}`} aria-label="Navigation principale">{links.map(([to, l]) => <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>{l}</NavLink>)}
       {!me && <div className="mobile-auth"><Link className="btn" to="/login?signup=1">Créer un compte</Link><Link className="btn ghost" to="/login">Se connecter</Link></div>}</nav>
     <div className="topbar-right">
+      {(!me || me.role === "student") && <Link className="icon-btn hide-sm" to="/favorites" aria-label="Mes favoris" title="Mes favoris"><Icon name="heart" /></Link>}
       {me && perm === "default" && <button className="icon-btn" onClick={onNotif} aria-label="Activer les notifications" title="Activer les notifications"><Icon name="bell" /></button>}
       {me ? <div className="usermenu" ref={box}>
-        <button className="avatar-btn" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Menu du compte"><span className="avatar">{(me.name || "?")[0].toUpperCase()}</span><span className="uname">{me.name.split(" ")[0]}</span></button>
-        {menu && <div className="dropdown" role="menu"><p><b>{me.name}</b><small>{ROLE[me.role]}</small></p>
-          {admin && <Link to="/admin"><Icon name="shield" size={16} />Espace admin</Link>}{!admin && <Link to="/orders"><Icon name="qr" size={16} />Mes commandes</Link>}{me.role === "merchant" && <Link to="/shop"><Icon name="store" size={16} />Mon commerce</Link>}
-          <Link to="/dashboard"><Icon name="chart" size={16} />Statistiques</Link><Link to="/profile"><Icon name="user" size={16} />Profil</Link>
+        <button className="avatar-btn" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Menu du compte"><span className="avatar">{first[0].toUpperCase()}</span><span className="uname">{first}</span></button>
+        {menu && <div className="dropdown" role="menu"><p><b>{me.name || first}</b><small>{ROLE[me.role]}</small></p>
+          {admin && <Link to="/admin"><Icon name="shield" size={16} />Espace admin</Link>}{me.role === "student" && <Link to="/dashboard"><Icon name="home" size={16} />Mon espace</Link>}{!admin && <Link to="/orders"><Icon name="qr" size={16} />{me.role === "merchant" ? "Commandes reçues" : "Mes réservations"}</Link>}{me.role === "merchant" && <Link to="/shop"><Icon name="store" size={16} />Mon commerce</Link>}
+          {me.role === "student" && <Link to="/favorites"><Icon name="heart" size={16} />Mes favoris</Link>}<Link to="/dashboard"><Icon name="chart" size={16} />{me.role === "student" ? "Mes statistiques" : "Statistiques"}</Link><Link to="/profile"><Icon name="user" size={16} />Profil</Link>
           <button onClick={onLogout}><Icon name="logout" size={16} />Déconnexion</button></div>}
       </div> : <div className="auth-links"><Link className="btn small ghost" to="/login">Se connecter</Link><Link className="btn small" to="/login?signup=1">Créer un compte</Link></div>}
       <button className="icon-btn burger" onClick={() => setOpen(!open)} aria-label={open ? "Fermer le menu" : "Ouvrir le menu"} aria-expanded={open}><Icon name={open ? "close" : "menu"} /></button>
@@ -163,8 +172,8 @@ export function Footer() {
   return <footer className="footer"><div className="footer-in">
     <div className="footer-brand"><Logo light /><p>Les invendus des restaurants et cafétérias autour de l'ESSECT, à prix réduit. Moins de gaspillage, plus de bons plans pour les étudiants.</p>
       <Link className="btn lemon small" to="/catalog">Voir les offres du jour</Link></div>
-    <div><h4>Explorer</h4><Link to="/catalog">Catalogue</Link><Link to="/catalog?cat=Panier%20surprise">Paniers surprise</Link><Link to="/radar">Campus Radar</Link><Link to="/impact">Impact et EcoPoints</Link></div>
-    <div><h4>Aide</h4><Link to="/about">Comment ça marche</Link><Link to="/about#faq">Questions fréquentes</Link><Link to="/login">Mon compte</Link><Link to="/orders">Mes commandes</Link></div>
+    <div><h4>Explorer</h4><Link to="/catalog">Catalogue</Link><Link to="/catalog?cat=Panier%20surprise">Paniers surprise</Link><Link to="/radar">Restaurants et carte</Link><Link to="/impact">Impact et EcoPoints</Link><Link to="/favorites">Mes favoris</Link></div>
+    <div><h4>Aide</h4><Link to="/about">À propos et fonctionnement</Link><Link to="/faq">Questions fréquentes</Link><Link to="/contact">Contact</Link><Link to="/orders">Mes réservations</Link></div>
     <div><h4>Commerçants</h4><Link to="/partners">Devenir partenaire</Link><Link to="/login?signup=1">Créer un compte pro</Link><Link to="/shop">Mon commerce</Link></div>
   </div><div className="footer-end"><small>© {new Date().getFullYear()} CampusSave · Projet pédagogique de 3ème année E-Business, ESSECT (modules Intégration Web et Développement Mobile).</small><small>Photos de démonstration : <a href="https://commons.wikimedia.org" target="_blank" rel="noopener noreferrer">Wikimedia Commons</a> (licences libres, auteurs crédités sur chaque fiche produit).</small></div></footer>;
 }
@@ -197,9 +206,9 @@ export const Avatar = ({ name = "?", size = 36 }) => <span className="avatar" st
 // ---------- Navigation mobile (barre du bas), messages de confirmation ----------
 export function BottomNav({ me }) {
   if (me?.role === "admin") return null;
-  const items = !me ? [["/", "Accueil", "home", true], ["/catalog", "Catalogue", "grid"], ["/radar", "Radar", "pin"], ["/login", "Connexion", "user"]]
+  const items = !me ? [["/", "Accueil", "home", true], ["/catalog", "Catalogue", "grid"], ["/radar", "Carte", "pin"], ["/favorites", "Favoris", "heart"], ["/login", "Connexion", "user"]]
     : me.role === "merchant" ? [["/", "Accueil", "home", true], ["/catalog", "Catalogue", "grid"], ["/shop", "Mon commerce", "store"], ["/orders", "Commandes", "qr"], ["/profile", "Profil", "user"]]
-    : [["/", "Accueil", "home", true], ["/catalog", "Catalogue", "grid"], ["/radar", "Radar", "pin"], ["/orders", "Commandes", "qr"], ["/profile", "Profil", "user"]];
+    : [["/dashboard", "Mon espace", "home"], ["/catalog", "Catalogue", "grid"], ["/radar", "Carte", "pin"], ["/orders", "Réservations", "qr"], ["/favorites", "Favoris", "heart"]];
   return <nav className="bottomnav" aria-label="Navigation mobile">{items.map(([to, l, ic, end]) => <NavLink key={to} to={to} end={end} className={({ isActive }) => (isActive ? "active" : "")}><Icon name={ic} size={22} /><span>{l}</span></NavLink>)}</nav>;
 }
 export const toast = (text, kind = "ok") => window.dispatchEvent(new CustomEvent("cs-toast", { detail: { text, kind, id: Date.now() } }));
@@ -209,3 +218,39 @@ export function Toaster() {
   useEffect(() => { if (!t) return; const id = setTimeout(() => setT(null), 4500); return () => clearTimeout(id); }, [t]);
   return t ? <div className={`snack ${t.kind}`} role="status" aria-live="polite"><span>{t.text}</span><button onClick={() => setT(null)} aria-label="Fermer">×</button></div> : null;
 }
+
+// ---------- Favoris (stockés sur cet appareil, par compte) ----------
+// Pas d'endpoint « favoris » dans le backend : la liste est gardée dans le localStorage du navigateur.
+const favKey = (uid) => `cs-fav-${uid || "guest"}`;
+const readFav = (uid) => { try { const v = JSON.parse(localStorage.getItem(favKey(uid)) || "{}"); return { offers: Array.isArray(v.offers) ? v.offers : [], shops: Array.isArray(v.shops) ? v.shops : [] }; } catch { return { offers: [], shops: [] }; } };
+export function useFavorites(me) {
+  const uid = me?.uid, [f, setF] = useState(() => readFav(uid));
+  useEffect(() => { setF(readFav(uid)); const sync = () => setF(readFav(uid)); window.addEventListener("cs-fav", sync); window.addEventListener("storage", sync); return () => { window.removeEventListener("cs-fav", sync); window.removeEventListener("storage", sync); }; }, [uid]);
+  const write = (next) => { try { localStorage.setItem(favKey(uid), JSON.stringify(next)); } catch { /* stockage indisponible */ } setF(next); window.dispatchEvent(new Event("cs-fav")); };
+  const toggleIn = (kind) => (id) => { const cur = readFav(uid), on = cur[kind].includes(id); write({ ...cur, [kind]: on ? cur[kind].filter(x => x !== id) : [id, ...cur[kind]] }); toast(on ? "Retiré des favoris." : "Ajouté aux favoris."); };
+  const enabled = !me || me.role === "student";
+  return {
+    enabled, data: f,
+    offers: { has: (id) => f.offers.includes(id), toggle: toggleIn("offers") },
+    shops: { has: (id) => f.shops.includes(id), toggle: toggleIn("shops") },
+    prune: (validOffers, validShops) => write({ offers: f.offers.filter(id => validOffers.includes(id)), shops: f.shops.filter(id => validShops.includes(id)) }),
+  };
+}
+export const FavButton = ({ active, onToggle, label, className = "fav" }) => <button type="button" className={`${className} ${active ? "on" : ""}`} aria-pressed={active}
+  aria-label={active ? `Retirer ${label} des favoris` : `Ajouter ${label} aux favoris`} title={active ? "Retirer des favoris" : "Ajouter aux favoris"}
+  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(); }}><Icon name="heart" size={18} filled={active} /></button>;
+
+// ---------- FAQ (accordéon) ----------
+export const Faq = ({ items }) => <div className="faq">{items.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div>;
+
+// ---------- Accès refusé (connecté avec un rôle qui n'a pas accès à la page) ----------
+export function Forbidden({ me }) {
+  useTitle("Accès réservé");
+  const home = me?.role === "merchant" ? ["/shop", "Aller à mon commerce"] : me?.role === "admin" ? ["/admin", "Aller à l'espace admin"] : ["/dashboard", "Aller à mon espace"];
+  return <div className="page"><div className="empty forbidden"><span className="forbidden-ico"><Icon name="lock" size={30} /></span><h3>Cette page n'est pas disponible pour ton compte</h3>
+    <p>Tu es connecté en tant que {ROLE[me?.role]?.toLowerCase() || "utilisateur"}. Cette section est réservée à un autre type de compte.</p>
+    <div className="cta-actions center"><Link className="btn" to={home[0]}>{home[1]}</Link><Link className="btn ghost" to="/">Accueil</Link></div></div></div>;
+}
+
+// ---------- Squelettes de chargement en liste ----------
+export const SkeletonRows = ({ n = 3 }) => <div className="skeleton-rows" aria-hidden="true">{Array.from({ length: n }, (_, i) => <div className="panel skeleton" key={i}><i style={{ width: "40%" }} /><i style={{ width: "70%" }} /></div>)}</div>;
