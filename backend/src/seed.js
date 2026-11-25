@@ -1,7 +1,7 @@
 // Données de démo : 8 commerces et 48 offres. Idempotent (IDs fixes : relancer ne crée pas de doublons).
 // Si photos.json existe (créé par « node src/fetch-photos.js »), les offres reçoivent leur photo réelle.
 import fs from "fs";
-import { db } from "./firebase.js";
+import { db } from "./config/firebase.js";
 import { CAMPUS, shops, offers } from "./catalog.js";
 
 let photos = {};
