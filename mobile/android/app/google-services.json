@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "799349094687",
+    "project_id": "campussave-d1a3f",
+    "storage_bucket": "campussave-d1a3f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:799349094687:android:d10d864fab94161759982a",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC1ShTXhVzKqNe-ocPpmy--I6LqdjvbXQE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
