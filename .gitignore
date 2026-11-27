@@ -6,3 +6,4 @@ dist/
 build/
 backend/serviceAccountKey.json
 backend/uploads/
+.claude/
